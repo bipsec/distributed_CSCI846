@@ -1,0 +1,5 @@
+# This project runs on standard Python 3 libraries.
+# No external PIP packages are required for the core application.
+
+# However, on Linux, Tkinter might need to be installed separately via your package manager:
+# sudo apt-get install python3-tk
