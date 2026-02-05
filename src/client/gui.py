@@ -1,31 +1,84 @@
-import tkinter as tk
-from tkinter import messagebox, ttk
-import socket
+"""Graphical User Interface (GUI) client for the Course Registration System.
 
-HOST = '127.0.0.1'
-PORT = 8080
+This module provides a Tkinter-based interface for users to interact with the
+distributed database system via the Name Server and Database Server.
+"""
+
+import tkinter as tk
+from tkinter import messagebox
+import socket
+from typing import Optional
 
 class CourseRegistrationApp:
-    def __init__(self, root):
+    """Tkinter application for Course Registration.
+
+    Handles connection, authentication, and interactions with the database server.
+    
+    Attributes:
+        root (tk.Tk): The root Tkinter window.
+        sock (Optional[socket.socket]): The socket connected to the database server.
+        student_id (Optional[str]): The ID of the currently logged-in student.
+    """
+
+    def __init__(self, root: tk.Tk):
+        """Initializes the application window and connects to the server.
+
+        Args:
+            root: The root Tkinter window.
+        """
         self.root = root
         self.root.title("Course Registration System")
         self.root.geometry("600x400")
         
-        self.sock = None
-        self.student_id = None
+        self.sock: Optional[socket.socket] = None
+        self.student_id: Optional[str] = None
         
         self.connect_to_server()
-        self.show_login_screen()
+        if self.sock:
+            self.show_login_screen()
 
-    def connect_to_server(self):
+    def connect_to_server(self) -> None:
+        """Connects to the database server via Name Server lookup.
+
+        Queries the Name Server for an available database server and establishes
+        a TCP connection. Handles failures by showing an error message.
+        """
         try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.connect((HOST, PORT))
+            NAME_SERVER_HOST = '127.0.0.1'
+            NAME_SERVER_PORT = 9090
+            
+            # Lookup DB Server
+            ns_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            ns_sock.connect((NAME_SERVER_HOST, NAME_SERVER_PORT))
+            ns_sock.sendall("LOOKUP".encode('utf-8'))
+            response = ns_sock.recv(1024).decode('utf-8')
+            ns_sock.close()
+            
+            parts = response.split()
+            if parts[0] == "SUCCESS":
+                server_host = parts[1]
+                server_port = int(parts[2])
+                
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.sock.connect((server_host, server_port))
+            else:
+                 messagebox.showerror("Connection Error", f"Name Server lookup failed: {response}")
+                 self.root.destroy()
+                 return
+
         except Exception as e:
-            messagebox.showerror("Connection Error", f"Could not connect to server: {e}")
+            messagebox.showerror("Connection Error", f"Could not connect: {e}")
             self.root.destroy()
 
-    def send_request(self, command):
+    def send_request(self, command: str) -> str:
+        """Sends a request to the server and returns the response.
+
+        Args:
+            command: The text command to send.
+
+        Returns:
+            The server's response as a string, or an error message.
+        """
         if not self.sock:
             return "ERROR No connection"
         try:
@@ -35,11 +88,13 @@ class CourseRegistrationApp:
         except Exception as e:
             return f"ERROR {e}"
 
-    def clear_screen(self):
+    def clear_screen(self) -> None:
+        """Removes all widgets from the current window."""
         for widget in self.root.winfo_children():
             widget.destroy()
 
-    def show_login_screen(self):
+    def show_login_screen(self) -> None:
+        """Displays the login screen."""
         self.clear_screen()
         
         frame = tk.Frame(self.root)
@@ -53,7 +108,8 @@ class CourseRegistrationApp:
         
         tk.Button(frame, text="Login", command=self.login).pack(pady=10)
 
-    def login(self):
+    def login(self) -> None:
+        """Handles the login process when the button is clicked."""
         student_id = self.entry_id.get().strip()
         if not student_id:
             messagebox.showwarning("Input Error", "Please enter a Student ID")
@@ -66,7 +122,8 @@ class CourseRegistrationApp:
         else:
             messagebox.showerror("Login Failed", response)
 
-    def show_dashboard(self):
+    def show_dashboard(self) -> None:
+        """Displays the main dashboard with available and enrolled courses."""
         self.clear_screen()
         
         # Header
@@ -101,7 +158,8 @@ class CourseRegistrationApp:
         
         self.refresh_data()
 
-    def refresh_data(self):
+    def refresh_data(self) -> None:
+        """Fetches latest data from server and updates the UI lists."""
         # Fetch Available
         resp = self.send_request("LIST")
         self.courses_listbox.delete(0, tk.END)
@@ -121,7 +179,8 @@ class CourseRegistrationApp:
                 for c in courses_str.split(','):
                     self.my_courses_listbox.insert(tk.END, c.strip())
 
-    def register_course(self):
+    def register_course(self) -> None:
+        """Registers the user for the selected course."""
         selection = self.courses_listbox.curselection()
         if not selection:
             messagebox.showwarning("Selection", "Please select a course to register.")
@@ -135,7 +194,8 @@ class CourseRegistrationApp:
         messagebox.showinfo("Result", resp)
         self.refresh_data()
 
-    def drop_course(self):
+    def drop_course(self) -> None:
+        """Drops the user from the selected course."""
         selection = self.my_courses_listbox.curselection()
         if not selection:
             messagebox.showwarning("Selection", "Please select a course to drop.")
@@ -147,11 +207,13 @@ class CourseRegistrationApp:
         messagebox.showinfo("Result", resp)
         self.refresh_data()
 
-    def logout(self):
+    def logout(self) -> None:
+        """Logs out the current user and returns to login screen."""
         self.student_id = None
         self.show_login_screen()
 
-    def on_close(self):
+    def on_close(self) -> None:
+        """Cleanly closes the connection and the application."""
         if self.sock:
             try:
                 self.sock.sendall("EXIT".encode('utf-8'))
