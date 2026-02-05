@@ -5,21 +5,24 @@ distributed database system via the Name Server and Database Server.
 """
 
 import socket
+import argparse
 from typing import Tuple, Optional
 
-def get_server_address() -> Tuple[Optional[str], Optional[int]]:
+def get_server_address(ns_host: str, ns_port: int) -> Tuple[Optional[str], Optional[int]]:
     """Retrieves the active Database Server address from the Name Server.
 
-    Connects to the Name Server on localhost:9090 and requests a server address.
+    Connects to the Name Server and requests a server address.
+    
+    Args:
+        ns_host: Name Server Host IP.
+        ns_port: Name Server Port.
 
     Returns:
         A tuple (host, port) if successful, or (None, None) if lookup fails.
     """
-    NAME_SERVER_HOST = '127.0.0.1'
-    NAME_SERVER_PORT = 9090
     try:
         ns_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        ns_sock.connect((NAME_SERVER_HOST, NAME_SERVER_PORT))
+        ns_sock.connect((ns_host, ns_port))
         ns_sock.sendall("LOOKUP".encode('utf-8'))
         response = ns_sock.recv(1024).decode('utf-8')
         ns_sock.close()
@@ -31,16 +34,16 @@ def get_server_address() -> Tuple[Optional[str], Optional[int]]:
             print(f"Name Server lookup failed: {response}")
             return None, None
     except Exception as e:
-        print(f"Could not connect to Name Server: {e}")
+        print(f"Could not connect to Name Server at {ns_host}:{ns_port}: {e}")
         return None, None
 
-def main() -> None:
+def main(ns_host: str, ns_port: int) -> None:
     """Main function to run the CLI client.
 
     Connects to the server, prompts for login, and provides a menu for
     course registration operations.
     """
-    db_host, db_port = get_server_address()
+    db_host, db_port = get_server_address(ns_host, ns_port)
     if not db_host:
         print("Could not retrieve database server address. Exiting.")
         return
@@ -123,4 +126,9 @@ def main() -> None:
         print("Disconnected.")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Distributed Course Registration CLI Client")
+    parser.add_argument('--ns-host', type=str, default='127.0.0.1', help='Name Server Host (default: 127.0.0.1)')
+    parser.add_argument('--ns-port', type=int, default=9090, help='Name Server Port (default: 9090)')
+    
+    args = parser.parse_args()
+    main(args.ns_host, args.ns_port)

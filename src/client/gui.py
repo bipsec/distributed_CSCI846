@@ -7,6 +7,7 @@ distributed database system via the Name Server and Database Server.
 import tkinter as tk
 from tkinter import messagebox
 import socket
+import argparse
 from typing import Optional
 
 class CourseRegistrationApp:
@@ -16,17 +17,23 @@ class CourseRegistrationApp:
     
     Attributes:
         root (tk.Tk): The root Tkinter window.
+        ns_host (str): Name Server Host IP.
+        ns_port (int): Name Server Port.
         sock (Optional[socket.socket]): The socket connected to the database server.
         student_id (Optional[str]): The ID of the currently logged-in student.
     """
 
-    def __init__(self, root: tk.Tk):
+    def __init__(self, root: tk.Tk, ns_host: str, ns_port: int):
         """Initializes the application window and connects to the server.
 
         Args:
             root: The root Tkinter window.
+            ns_host: Name Server Host IP.
+            ns_port: Name Server Port.
         """
         self.root = root
+        self.ns_host = ns_host
+        self.ns_port = ns_port
         self.root.title("Course Registration System")
         self.root.geometry("600x400")
         
@@ -44,12 +51,9 @@ class CourseRegistrationApp:
         a TCP connection. Handles failures by showing an error message.
         """
         try:
-            NAME_SERVER_HOST = '127.0.0.1'
-            NAME_SERVER_PORT = 9090
-            
             # Lookup DB Server
             ns_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            ns_sock.connect((NAME_SERVER_HOST, NAME_SERVER_PORT))
+            ns_sock.connect((self.ns_host, self.ns_port))
             ns_sock.sendall("LOOKUP".encode('utf-8'))
             response = ns_sock.recv(1024).decode('utf-8')
             ns_sock.close()
@@ -223,7 +227,13 @@ class CourseRegistrationApp:
         self.root.destroy()
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Distributed Course Registration GUI Client")
+    parser.add_argument('--ns-host', type=str, default='127.0.0.1', help='Name Server Host (default: 127.0.0.1)')
+    parser.add_argument('--ns-port', type=int, default=9090, help='Name Server Port (default: 9090)')
+    
+    args = parser.parse_args()
+
     root = tk.Tk()
-    app = CourseRegistrationApp(root)
+    app = CourseRegistrationApp(root, args.ns_host, args.ns_port)
     root.protocol("WM_DELETE_WINDOW", app.on_close)
     root.mainloop()

@@ -6,10 +6,10 @@ and handles incoming client connections using threads.
 
 import socket
 import threading
+import argparse
 from typing import Optional
 
 # Import Database from the common module
-# Adjust path assuming this is run as a module or with PYTHONPATH set appropriately
 try:
     from src.common.database import Database
 except ImportError:
@@ -19,11 +19,23 @@ except ImportError:
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
     from src.common.database import Database
 
-HOST = '127.0.0.1'
-PORT = 8080
-
 # Initialize Database
 db = Database()
+
+def get_lan_ip() -> str:
+    """Attempts to determine the machine's LAN IP address.
+
+    Connects to an external public IP (Google DNS) to see which local interface is used.
+    Does not actually send data.
+    """
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
 
 def handle_client(client_socket: socket.socket) -> None:
     """Handles communication with a connected client.
@@ -97,40 +109,59 @@ def handle_client(client_socket: socket.socket) -> None:
         print(f"Connection closed for {student_id}")
         client_socket.close()
 
-def register_with_name_server() -> None:
+def register_with_name_server(host: str, port: int, ns_host: str, ns_port: int) -> None:
     """Registers this server with the Name Server.
 
-    Connects to the Name Server on localhost:9090 and sends its own host/port.
-    Prints status to stdout.
+    Connects to the Name Server and sends its own host/port.
+    If 'host' is 0.0.0.0, it attempts to resolve the actual LAN IP.
+
+    Args:
+        host: The host this server is bound to.
+        port: The port this server is bound to.
+        ns_host: The IP of the Name Server.
+        ns_port: The port of the Name Server.
     """
-    NAME_SERVER_HOST = '127.0.0.1'
-    NAME_SERVER_PORT = 9090
+    
+    # If we are binding to all interfaces (0.0.0.0), we need to tell the Name Server
+    # our actual IP so clients can reach us.
+    register_host = host
+    if host == '0.0.0.0':
+        register_host = get_lan_ip()
+        print(f"Binding to 0.0.0.0, detected LAN IP as {register_host}")
+
     try:
         ns_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        ns_sock.connect((NAME_SERVER_HOST, NAME_SERVER_PORT))
-        msg = f"REGISTER {HOST} {PORT}"
+        ns_sock.connect((ns_host, ns_port))
+        
+        msg = f"REGISTER {register_host} {port}"
         ns_sock.sendall(msg.encode('utf-8'))
+        
         response = ns_sock.recv(1024).decode('utf-8')
         if response == "SUCCESS":
-            print(f"Successfully registered with Name Server at {NAME_SERVER_HOST}:{NAME_SERVER_PORT}")
+            print(f"Successfully registered with Name Server at {ns_host}:{ns_port}")
         else:
             print(f"Failed to register with Name Server: {response}")
         ns_sock.close()
     except Exception as e:
-        print(f"Could not connect to Name Server: {e}")
+        print(f"Could not connect to Name Server at {ns_host}:{ns_port}: {e}")
 
-def start_server() -> None:
+def start_server(host: str, port: int, ns_host: str, ns_port: int) -> None:
     """Starts the Database Server.
 
     Binds to HOST and PORT, registers with Name Server, and accepts incoming connections.
     """
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind((HOST, PORT))
+    try:
+        server.bind((host, port))
+    except OSError as e:
+        print(f"Failed to bind to {host}:{port}: {e}")
+        return
+
     server.listen(5)
-    print(f"Server listening on {HOST}:{PORT}")
+    print(f"Server listening on {host}:{port}")
     
     # Register with Name Server
-    register_with_name_server()
+    register_with_name_server(host, port, ns_host, ns_port)
 
     try:
         while True:
@@ -144,4 +175,11 @@ def start_server() -> None:
         server.close()
 
 if __name__ == "__main__":
-    start_server()
+    parser = argparse.ArgumentParser(description="Distributed Course Registration Database Server")
+    parser.add_argument('--host', type=str, default='0.0.0.0', help='Host interface to bind to (default: 0.0.0.0)')
+    parser.add_argument('--port', type=int, default=8080, help='Port to listen on (default: 8080)')
+    parser.add_argument('--ns-host', type=str, default='127.0.0.1', help='Name Server Host (default: 127.0.0.1)')
+    parser.add_argument('--ns-port', type=int, default=9090, help='Name Server Port (default: 9090)')
+    
+    args = parser.parse_args()
+    start_server(args.host, args.port, args.ns_host, args.ns_port)

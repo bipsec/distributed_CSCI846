@@ -77,9 +77,9 @@ def main():
     env = os.environ.copy()
     env["PYTHONPATH"] = os.getcwd()
 
-    print("Starting Name Server...")
+    print("Starting Name Server (binding to 127.0.0.1)...")
     ns_process = subprocess.Popen(
-        [sys.executable, "-m", "src.nameserver.main"],
+        [sys.executable, "-m", "src.nameserver.main", "--host", "127.0.0.1", "--port", "9090"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -87,9 +87,9 @@ def main():
     )
     time.sleep(2) # Wait for startup
 
-    print("Starting DB Server...")
+    print("Starting DB Server (connecting to NS at 127.0.0.1)...")
     db_process = subprocess.Popen(
-        [sys.executable, "-m", "src.server.main"],
+        [sys.executable, "-m", "src.server.main", "--host", "127.0.0.1", "--port", "8080", "--ns-host", "127.0.0.1", "--ns-port", "9090"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -99,6 +99,13 @@ def main():
 
     try:
         print("Running Client Test...")
+        # Client uses default 127.0.0.1 if not specified, but let's be explicit to test args
+        # Since test_client_flow calls python code directly, we can't easily pass args to it unless we change it 
+        # or just rely on default being 127.0.0.1 inside the function.
+        # But wait, test_client_flow manually does socket stuff. It mimics a client.
+        # So we just need to make sure the SERVERS are up and running with the new args.
+        # The test_client_flow function itself creates a socket to 127.0.0.1:9090.
+        
         res = test_client_flow("TestStudentNS")
         for r in res:
             print(r)
