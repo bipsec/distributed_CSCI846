@@ -9,6 +9,7 @@
         "ENG101": "{\"name\": \"English Composition\", \"capacity\": 15, \"enrolled\": 0}"
     },
     "Students": {
-        "ali": "{\"enrollments\": [\"ENG101\"]}"
+        "ali": "{\"enrollments\": [\"ENG101\"]}",
+        "12": "{\"enrollments\": [\"ENG101\", \"PHY301\"]}"
     }
 }
