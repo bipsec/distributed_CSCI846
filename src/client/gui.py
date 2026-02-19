@@ -1,4 +1,4 @@
-"""Graphical User Interface (GUI) client for the Course Registration System.
+"""Graphical User Interface (GUI) client for the key-value database system.
 
 This module provides a Tkinter-based interface for users to interact with the
 distributed database system via the Name Server and Database Server.
@@ -8,23 +8,18 @@ import tkinter as tk
 from tkinter import messagebox
 import socket
 import argparse
-from typing import Optional
+import json
+import os
+from typing import Optional, Dict, Tuple
 
-class CourseRegistrationApp:
-    """Tkinter application for Course Registration.
+class KeyValueClientApp:
+    """Tkinter application for key-value operations.
 
-    Handles connection, authentication, and interactions with the database server.
-    
-    Attributes:
-        root (tk.Tk): The root Tkinter window.
-        ns_host (str): Name Server Host IP.
-        ns_port (int): Name Server Port.
-        sock (Optional[socket.socket]): The socket connected to the database server.
-        student_id (Optional[str]): The ID of the currently logged-in student.
+    Resolves table locations via the Name Server and sends PUT/GET/DEL commands.
     """
 
     def __init__(self, root: tk.Tk, ns_host: str, ns_port: int):
-        """Initializes the application window and connects to the server.
+        """Initializes the application window.
 
         Args:
             root: The root Tkinter window.
@@ -34,206 +29,141 @@ class CourseRegistrationApp:
         self.root = root
         self.ns_host = ns_host
         self.ns_port = ns_port
-        self.root.title("Course Registration System")
-        self.root.geometry("600x400")
-        
-        self.sock: Optional[socket.socket] = None
-        self.student_id: Optional[str] = None
-        
-        self.connect_to_server()
-        if self.sock:
-            self.show_login_screen()
+        self.root.title("Distributed Key-Value Client")
+        self.root.geometry("640x420")
 
-    def connect_to_server(self) -> None:
-        """Connects to the database server via Name Server lookup.
+        self._build_ui()
 
-        Queries the Name Server for an available database server and establishes
-        a TCP connection. Handles failures by showing an error message.
-        """
+    def lookup_server(self, table_name: str) -> Tuple[Optional[str], Optional[int], Optional[str]]:
+        """Resolves the server for a table via the Name Server."""
         try:
-            # Lookup DB Server
             ns_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             ns_sock.connect((self.ns_host, self.ns_port))
-            ns_sock.sendall("LOOKUP".encode('utf-8'))
+            ns_sock.sendall(f"LOOKUP {table_name}".encode('utf-8'))
             response = ns_sock.recv(1024).decode('utf-8')
             ns_sock.close()
-            
+
             parts = response.split()
-            if parts[0] == "SUCCESS":
-                server_host = parts[1]
-                server_port = int(parts[2])
-                
-                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.sock.connect((server_host, server_port))
-            else:
-                 messagebox.showerror("Connection Error", f"Name Server lookup failed: {response}")
-                 self.root.destroy()
-                 return
-
+            if parts and parts[0] == "SUCCESS" and len(parts) >= 3:
+                return parts[1], int(parts[2]), None
+            return None, None, response
         except Exception as e:
-            messagebox.showerror("Connection Error", f"Could not connect: {e}")
-            self.root.destroy()
+            return None, None, str(e)
 
-    def send_request(self, command: str) -> str:
-        """Sends a request to the server and returns the response.
+    def send_request(self, table_name: str, command: str) -> str:
+        """Resolves the table and sends a request to the server."""
+        host, port, error = self.lookup_server(table_name)
+        if not host or not port:
+            return f"ERROR: {error or 'Table not found'}"
 
-        Args:
-            command: The text command to send.
-
-        Returns:
-            The server's response as a string, or an error message.
-        """
-        if not self.sock:
-            return "ERROR No connection"
         try:
-            self.sock.sendall(command.encode('utf-8'))
-            response = self.sock.recv(4096).decode('utf-8')
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((host, port))
+            sock.sendall(command.encode('utf-8'))
+            response = sock.recv(4096).decode('utf-8')
+            sock.sendall("EXIT".encode('utf-8'))
+            sock.close()
             return response
         except Exception as e:
-            return f"ERROR {e}"
+            return f"ERROR: {e}"
 
-    def clear_screen(self) -> None:
-        """Removes all widgets from the current window."""
-        for widget in self.root.winfo_children():
-            widget.destroy()
+    def _build_ui(self) -> None:
+        container = tk.Frame(self.root, padx=12, pady=12)
+        container.pack(fill=tk.BOTH, expand=True)
 
-    def show_login_screen(self) -> None:
-        """Displays the login screen."""
-        self.clear_screen()
-        
-        frame = tk.Frame(self.root)
-        frame.pack(expand=True)
-        
-        tk.Label(frame, text="Student Login", font=("Arial", 16)).pack(pady=10)
-        
-        tk.Label(frame, text="Student ID:").pack()
-        self.entry_id = tk.Entry(frame)
-        self.entry_id.pack(pady=5)
-        
-        tk.Button(frame, text="Login", command=self.login).pack(pady=10)
+        tk.Label(container, text="Table").grid(row=0, column=0, sticky="w")
+        self.table_entry = tk.Entry(container, width=30)
+        self.table_entry.grid(row=0, column=1, sticky="ew", pady=4)
 
-    def login(self) -> None:
-        """Handles the login process when the button is clicked."""
-        student_id = self.entry_id.get().strip()
-        if not student_id:
-            messagebox.showwarning("Input Error", "Please enter a Student ID")
+        tk.Label(container, text="Key").grid(row=1, column=0, sticky="w")
+        self.key_entry = tk.Entry(container, width=30)
+        self.key_entry.grid(row=1, column=1, sticky="ew", pady=4)
+
+        tk.Label(container, text="Data").grid(row=2, column=0, sticky="w")
+        self.data_entry = tk.Entry(container, width=30)
+        self.data_entry.grid(row=2, column=1, sticky="ew", pady=4)
+
+        button_frame = tk.Frame(container)
+        button_frame.grid(row=3, column=0, columnspan=2, pady=8)
+        tk.Button(button_frame, text="PUT", width=10, command=self.handle_put).pack(side=tk.LEFT, padx=4)
+        tk.Button(button_frame, text="GET", width=10, command=self.handle_get).pack(side=tk.LEFT, padx=4)
+        tk.Button(button_frame, text="DEL", width=10, command=self.handle_del).pack(side=tk.LEFT, padx=4)
+
+        tk.Label(container, text="Response").grid(row=4, column=0, sticky="w")
+        self.response_text = tk.Text(container, height=8, wrap=tk.WORD)
+        self.response_text.grid(row=5, column=0, columnspan=2, sticky="nsew")
+
+        container.columnconfigure(1, weight=1)
+        container.rowconfigure(5, weight=1)
+
+    def _get_inputs(self) -> Tuple[str, str, str]:
+        return (
+            self.table_entry.get().strip(),
+            self.key_entry.get().strip(),
+            self.data_entry.get().strip(),
+        )
+
+    def _set_response(self, message: str) -> None:
+        self.response_text.delete("1.0", tk.END)
+        self.response_text.insert(tk.END, message)
+
+    def handle_put(self) -> None:
+        table, key, data = self._get_inputs()
+        if not table or not key or not data:
+            messagebox.showwarning("Input Error", "Table, key, and data are required for PUT.")
             return
-            
-        response = self.send_request(f"LOGIN {student_id}")
-        if response.startswith("SUCCESS"):
-            self.student_id = student_id
-            self.show_dashboard()
-        else:
-            messagebox.showerror("Login Failed", response)
+        response = self.send_request(table, f"PUT {table} {key} {data}")
+        self._set_response(response)
 
-    def show_dashboard(self) -> None:
-        """Displays the main dashboard with available and enrolled courses."""
-        self.clear_screen()
-        
-        # Header
-        header_frame = tk.Frame(self.root)
-        header_frame.pack(fill=tk.X, padx=10, pady=5)
-        tk.Label(header_frame, text=f"Welcome, {self.student_id}", font=("Arial", 12, "bold")).pack(side=tk.LEFT)
-        tk.Button(header_frame, text="Logout", command=self.logout).pack(side=tk.RIGHT)
-
-        # Main Content
-        content_frame = tk.Frame(self.root)
-        content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-
-        # Split into two columns
-        left_frame = tk.LabelFrame(content_frame, text="Available Courses")
-        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
-        
-        right_frame = tk.LabelFrame(content_frame, text="My Courses")
-        right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=5)
-
-        # Available Courses List
-        self.courses_listbox = tk.Listbox(left_frame)
-        self.courses_listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        tk.Button(left_frame, text="Register Selected", command=self.register_course).pack(pady=5)
-
-        # My Courses List
-        self.my_courses_listbox = tk.Listbox(right_frame)
-        self.my_courses_listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        tk.Button(right_frame, text="Drop Selected", command=self.drop_course).pack(pady=5)
-
-        # Refresh
-        tk.Button(self.root, text="Refresh Data", command=self.refresh_data).pack(pady=5)
-        
-        self.refresh_data()
-
-    def refresh_data(self) -> None:
-        """Fetches latest data from server and updates the UI lists."""
-        # Fetch Available
-        resp = self.send_request("LIST")
-        self.courses_listbox.delete(0, tk.END)
-        if resp.startswith("SUCCESS"):
-            lines = resp.split('\n')[1:] # Skip SUCCESS line
-            for line in lines:
-                if line.strip():
-                    self.courses_listbox.insert(tk.END, line)
-
-        # Fetch My Courses
-        resp = self.send_request("MY_COURSES")
-        self.my_courses_listbox.delete(0, tk.END)
-        if resp.startswith("SUCCESS"):
-            # Format: SUCCESS CS101, MATH201
-            courses_str = resp[8:].strip()
-            if courses_str:
-                for c in courses_str.split(','):
-                    self.my_courses_listbox.insert(tk.END, c.strip())
-
-    def register_course(self) -> None:
-        """Registers the user for the selected course."""
-        selection = self.courses_listbox.curselection()
-        if not selection:
-            messagebox.showwarning("Selection", "Please select a course to register.")
+    def handle_get(self) -> None:
+        table, key, _ = self._get_inputs()
+        if not table or not key:
+            messagebox.showwarning("Input Error", "Table and key are required for GET.")
             return
-            
-        course_str = self.courses_listbox.get(selection[0])
-        # Extract ID (assuming format "ID: Name ...")
-        course_id = course_str.split(':')[0]
-        
-        resp = self.send_request(f"REGISTER {course_id}")
-        messagebox.showinfo("Result", resp)
-        self.refresh_data()
+        response = self.send_request(table, f"GET {table} {key}")
+        self._set_response(response)
 
-    def drop_course(self) -> None:
-        """Drops the user from the selected course."""
-        selection = self.my_courses_listbox.curselection()
-        if not selection:
-            messagebox.showwarning("Selection", "Please select a course to drop.")
+    def handle_del(self) -> None:
+        table, key, _ = self._get_inputs()
+        if not table or not key:
+            messagebox.showwarning("Input Error", "Table and key are required for DEL.")
             return
-            
-        course_id = self.my_courses_listbox.get(selection[0])
-        
-        resp = self.send_request(f"DROP {course_id}")
-        messagebox.showinfo("Result", resp)
-        self.refresh_data()
-
-    def logout(self) -> None:
-        """Logs out the current user and returns to login screen."""
-        self.student_id = None
-        self.show_login_screen()
+        response = self.send_request(table, f"DEL {table} {key}")
+        self._set_response(response)
 
     def on_close(self) -> None:
         """Cleanly closes the connection and the application."""
-        if self.sock:
-            try:
-                self.sock.sendall("EXIT".encode('utf-8'))
-                self.sock.close()
-            except:
-                pass
         self.root.destroy()
 
+def load_config(path: str) -> Dict[str, Dict[str, object]]:
+    """Loads JSON config if it exists, otherwise returns empty config."""
+    if not path:
+        return {}
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, 'r') as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Distributed Course Registration GUI Client")
+    parser = argparse.ArgumentParser(description="Distributed Key-Value GUI Client")
+    parser.add_argument('--config', type=str, default='config.json', help='Path to JSON config file')
     parser.add_argument('--ns-host', type=str, default='127.0.0.1', help='Name Server Host (default: 127.0.0.1)')
     parser.add_argument('--ns-port', type=int, default=9090, help='Name Server Port (default: 9090)')
-    
+
+    config_args, _ = parser.parse_known_args()
+    config = load_config(config_args.config)
+    client_config = config.get('client', {}) if isinstance(config, dict) else {}
+    parser.set_defaults(
+        ns_host=client_config.get('ns_host', parser.get_default('ns_host')),
+        ns_port=client_config.get('ns_port', parser.get_default('ns_port')),
+    )
+
     args = parser.parse_args()
 
     root = tk.Tk()
-    app = CourseRegistrationApp(root, args.ns_host, args.ns_port)
+    app = KeyValueClientApp(root, args.ns_host, args.ns_port)
     root.protocol("WM_DELETE_WINDOW", app.on_close)
     root.mainloop()

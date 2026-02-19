@@ -1,0 +1,14 @@
+{
+    "Email": {
+        "Ali": "ali.tariq@ndsu.edu"
+    },
+    "Courses": {
+        "CS101": "{\"name\": \"Introduction to CS\", \"capacity\": 30, \"enrolled\": 0}",
+        "MATH201": "{\"name\": \"Calculus I\", \"capacity\": 25, \"enrolled\": 0}",
+        "PHY301": "{\"name\": \"Physics III\", \"capacity\": 20, \"enrolled\": 0}",
+        "ENG101": "{\"name\": \"English Composition\", \"capacity\": 15, \"enrolled\": 0}"
+    },
+    "Students": {
+        "ali": "{\"enrollments\": [\"ENG101\"]}"
+    }
+}
