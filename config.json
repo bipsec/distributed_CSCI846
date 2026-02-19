@@ -1,6 +1,7 @@
 {
   "hostname_map": {
-    "lab.ndsu.edu": "172.25.136.150"
+    "lab.ndsu.edu": "172.25.136.150",
+    "lab2.ndsu.edu": "172.25.136.150"
   },
   "name_server": {
     "host": "172.25.136.150",
