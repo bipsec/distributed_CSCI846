@@ -20,6 +20,33 @@ def load_config(path: str) -> Dict[str, Dict[str, object]]:
     except (OSError, json.JSONDecodeError):
         return {}
 
+def resolve_hostname(hostname: str, hostname_map: Dict[str, str] = None) -> str:
+    """Resolves a hostname or IP address to an IP address.
+    
+    Checks local hostname mapping in config first, then tries DNS resolution.
+    
+    Args:
+        hostname: Hostname (e.g., 'lab.ndsu.edu') or IP address.
+        hostname_map: Optional dictionary mapping hostnames to IP addresses.
+        
+    Returns:
+        Resolved IP address string, or the original input if resolution fails.
+    """
+    # Check local hostname mapping first
+    if hostname_map and hostname in hostname_map:
+        ip = hostname_map[hostname]
+        print(f"Resolved '{hostname}' to {ip} (from config)")
+        return ip
+    
+    # Try DNS resolution
+    try:
+        ip = socket.gethostbyname(hostname)
+        print(f"Resolved '{hostname}' to {ip} (from DNS)")
+        return ip
+    except socket.gaierror:
+        print(f"Warning: Could not resolve hostname '{hostname}', using as-is")
+        return hostname
+
 def handle_client(client_socket: socket.socket) -> None:
     """Handles requests from clients and servers.
 
@@ -109,4 +136,11 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    start_name_server(args.host, args.port)
+    
+    # Get hostname mapping from config
+    hostname_map = config.get('hostname_map', {}) if isinstance(config, dict) else {}
+    
+    # Resolve bind hostname to IP address
+    resolved_host = resolve_hostname(args.host, hostname_map)
+    
+    start_name_server(resolved_host, args.port)

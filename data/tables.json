@@ -10,6 +10,7 @@
     },
     "Students": {
         "ali": "{\"enrollments\": [\"ENG101\"]}",
-        "12": "{\"enrollments\": [\"ENG101\", \"PHY301\"]}"
+        "12": "{\"enrollments\": [\"ENG101\", \"CS101\"]}",
+        "fvwerj": "{\"enrollments\": []}"
     }
 }

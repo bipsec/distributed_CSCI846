@@ -36,6 +36,33 @@ def load_config(path: str) -> Dict[str, Dict[str, object]]:
     except (OSError, json.JSONDecodeError):
         return {}
 
+def resolve_hostname(hostname: str, hostname_map: Dict[str, str] = None) -> str:
+    """Resolves a hostname or IP address to an IP address.
+    
+    Checks local hostname mapping in config first, then tries DNS resolution.
+    
+    Args:
+        hostname: Hostname (e.g., 'lab.ndsu.edu') or IP address.
+        hostname_map: Optional dictionary mapping hostnames to IP addresses.
+        
+    Returns:
+        Resolved IP address string, or the original input if resolution fails.
+    """
+    # Check local hostname mapping first
+    if hostname_map and hostname in hostname_map:
+        ip = hostname_map[hostname]
+        print(f"Resolved '{hostname}' to {ip} (from config)")
+        return ip
+    
+    # Try DNS resolution
+    try:
+        ip = socket.gethostbyname(hostname)
+        print(f"Resolved '{hostname}' to {ip} (from DNS)")
+        return ip
+    except socket.gaierror:
+        print(f"Warning: Could not resolve hostname '{hostname}', using as-is")
+        return hostname
+
 def get_lan_ip() -> str:
     """Attempts to determine the machine's LAN IP address.
 
@@ -202,4 +229,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     tables = [t.strip() for t in args.tables.split(',') if t.strip()]
-    start_server(args.host, args.port, args.ns_host, args.ns_port, tables)
+    
+    # Get hostname mapping from config
+    hostname_map = config.get('hostname_map', {}) if isinstance(config, dict) else {}
+    
+    # Resolve nameserver hostname to IP address
+    resolved_ns_host = resolve_hostname(args.ns_host, hostname_map)
+    
+    start_server(args.host, args.port, resolved_ns_host, args.ns_port, tables)

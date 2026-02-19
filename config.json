@@ -1,6 +1,6 @@
 {
   "hostname_map": {
-    "Ali": "172.25.136.150"
+    "lab.ndsu.edu": "172.25.136.150"
   },
   "name_server": {
     "host": "172.25.136.150",
@@ -9,12 +9,12 @@
   "server": {
     "host": "172.25.136.150",
     "port": 8080,
-    "ns_host": "Ali",
+    "ns_host": "lab.ndsu.edu",
     "ns_port": 9090,
     "tables": "Phone,Email"
   },
   "client": {
-    "ns_host": "Ali",
+    "ns_host": "lab.ndsu.edu",
     "ns_port": 9090
   }
 }
